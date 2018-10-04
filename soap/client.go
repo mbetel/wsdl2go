@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"reflect"
+	"log"
+	"net/http/httputil"
 )
 
 // XSINamespace is a link to the XML Schema instance namespace.
@@ -46,6 +48,8 @@ type Client struct {
 	UserAgent              string               // User-Agent header will be added to each request
 	Namespace              string               // SOAP Namespace
 	URNamespace            string               // Uniform Resource Namespace
+	UR1Namespace           string               // Uniform Resource Namespace
+	UR2Namespace           string               // Uniform Resource Namespace
 	ThisNamespace          string               // SOAP This-Namespace (tns)
 	ExcludeActionNamespace bool                 // Include Namespace to SOAP Action header
 	Envelope               string               // Optional SOAP Envelope
@@ -54,6 +58,7 @@ type Client struct {
 	Config                 *http.Client         // Optional HTTP client
 	Pre                    func(*http.Request)  // Optional hook to modify outbound requests
 	Post                   func(*http.Response) // Optional hook to snoop inbound responses
+	Debug                  bool                 // log http requests
 }
 
 // XMLTyper is an abstract interface for types that can set an XML type.
@@ -97,6 +102,8 @@ func doRoundTrip(c *Client, setHeaders func(*http.Request), in, out Message) err
 	req := &Envelope{
 		EnvelopeAttr: c.Envelope,
 		URNAttr:      c.URNamespace,
+		URN1Attr:     c.UR1Namespace,
+		URN2Attr:     c.UR2Namespace,
 		NSAttr:       c.Namespace,
 		TNSAttr:      c.ThisNamespace,
 		XSIAttr:      XSINamespace,
@@ -130,9 +137,25 @@ func doRoundTrip(c *Client, setHeaders func(*http.Request), in, out Message) err
 	if c.Pre != nil {
 		c.Pre(r)
 	}
+	if c.Debug {
+		lreq, err := httputil.DumpRequestOut(r,true)
+		if err != nil {
+			log.Print(err)
+		} else {
+			log.Printf("\nRequest:\n%s",lreq)
+		}
+	}
 	resp, err := cli.Do(r)
 	if err != nil {
 		return err
+	}
+	if c.Debug {
+		lresp, err := httputil.DumpResponse(resp,true)
+		if err != nil {
+			log.Print(err)
+		} else {
+			log.Printf("\nResponse:\n%s",lresp)
+		}
 	}
 	defer resp.Body.Close()
 	if c.Post != nil {
@@ -235,6 +258,8 @@ type Envelope struct {
 	NSAttr       string   `xml:"xmlns:ns,attr"`
 	TNSAttr      string   `xml:"xmlns:tns,attr,omitempty"`
 	URNAttr      string   `xml:"xmlns:urn,attr,omitempty"`
+	URN1Attr     string   `xml:"xmlns:urn1,attr,omitempty"`
+	URN2Attr     string   `xml:"xmlns:urn2,attr,omitempty"`
 	XSIAttr      string   `xml:"xmlns:xsi,attr,omitempty"`
 	Header       Message  `xml:"SOAP-ENV:Header"`
 	Body         Message  `xml:"SOAP-ENV:Body"`
